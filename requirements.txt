@@ -1,0 +1,3 @@
+# this gets us browser automation via their python api and driver 
+# actual browser binaries are installed separately (playwright install chromium, see readme later)
+playwright>=1.40,<2
