@@ -128,7 +128,9 @@ class BrowserEnv:
         """
         self._last_interactive_locators = self._list_interactive_locators()
         lines: List[str] = [
-            f"URL: {self.page.url}",
+            f"URL: {self.page.url}", # necessary for model to know where it is
+                                     # just title would be cleaner but know from testing on x.com
+                                     # that title() is unreliable on spa's (where stuff like title is set by react)
             f"Title: {self.page.title()}",
             f"Interactive elements: {len(self._last_interactive_locators)}",
             "",
