@@ -179,8 +179,8 @@ def run_episode(
 if __name__ == "__main__":
     # needs api key set in env and playwright install chromium
     steps = run_episode(
-        url="https://example.com",
-        goal="Find the More information link and click it", # i suspect ill need to make changes for sites where nav may actually timeout
+        url="https://google.com",
+        goal="Find the Search bar and search for 'playwright'",
         model="gpt-5.4-mini",
         max_steps=5,
         headless=True,

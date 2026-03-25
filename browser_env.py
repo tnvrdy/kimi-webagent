@@ -124,13 +124,28 @@ class BrowserEnv:
         """
         Build a text snapshot: url, title, then numbered interactive elements.
         (**in v0**, indices i match _last_interactive_locators[i] for a future action)
+        
+        Waits for any in-progress navigation to settle before reading the DOM,
+        preventing stale locator queries after actions that trigger a new page load.
+        title() is additionally wrapped defensively to handle the narrow race window where it could
+        throw while mid-navigation. instead of crashing, the observation will say "loading..."
+        and the loop will re-observe next step, which should be a fully loaded page.
         """
+        try:
+            self.page.wait_for_load_state("domcontentloaded", timeout=8000)
+        except Exception:
+            pass  # already settled or timed out, proceed anyway
+
+        try:
+            title = self.page.title()
+        except Exception:
+            title = "(loading...)"  # context destroyed mid-navigation, loop will re-observe next step
+
         self._last_interactive_locators = self._list_interactive_locators()
         lines: List[str] = [
-            f"URL: {self.page.url}", # necessary for model to know where it is
-                                     # just title would be cleaner but know from testing on x.com
+            f"URL: {self.page.url}", # just title would be cleaner but know from testing on x.com
                                      # that title() is unreliable on spa's (where stuff like title is set by react)
-            f"Title: {self.page.title()}",
+            f"Title: {title}",
             f"Interactive elements: {len(self._last_interactive_locators)}",
             "",
         ]
@@ -176,10 +191,6 @@ class BrowserEnv:
         recent get_observation() output
         """
         try:
-            self.page.wait_for_load_state("domcontentloaded", timeout=8000)
-        except Exception:
-            pass  # let page.title() handle it?
-        try:
             action_type = action.action_type
 
             if action_type == "stop":
@@ -220,7 +231,7 @@ class BrowserEnv:
                         # using the keyboard is the most consistent way to trigger Enter after typing
                         self.page.keyboard.press("Enter")
                 try:
-                    self.page.wait_for_load_state("domcontentloaded", timeout=8000)
+                    self.page.wait_for_load_state("load", timeout=8000)
                 except Exception:
                     pass
                 return {"ok": True}
