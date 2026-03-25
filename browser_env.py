@@ -20,6 +20,8 @@ from typing import List, Optional
 
 from playwright.sync_api import Browser, BrowserContext, Page, Playwright, sync_playwright, Locator
 
+from actions import ActionParseError, ParsedAction, parse_action
+
 # locator query for interactive elements in DOM order; must stay in sync with click/type by index in v0
 _INTERACTIVE_SELECTOR = (
     "a[href], button, input, textarea, select, "
@@ -153,6 +155,88 @@ class BrowserEnv:
         """
         self.page.goto(url, wait_until=wait_until)
 
+    def _resolve_locator(self, index: Optional[int], action_name: str):
+        """
+        Intended for use by click / type actions (or anything that needs index and locator)
+        Validates index and returns (locator, None) on success, or (None, error_dict) on failure.
+        Also scrolls the element into view so it's ready to interact with
+        """
+        if index is None:
+            return None, {"ok": False, "error": f"{action_name}: missing index"}
+        if not self._last_interactive_locators:
+            return None, {"ok": False, "error": f"{action_name}: no observation available (call get_observation first)"}
+        if index < 0 or index >= len(self._last_interactive_locators):
+            return None, {"ok": False, "error": f"{action_name}: index {index} out of range (0–{len(self._last_interactive_locators) - 1})"}
+        loc = self._last_interactive_locators[index]
+        loc.scroll_into_view_if_needed(timeout=5000)
+        return loc, None
+
+    def execute_action(self, action: ParsedAction) -> dict:
+        """
+        Execute one ParsedAction against the current page. Returns dict with ok/error keys
+
+        For click / type, action.index refers to the indices produced by the most
+        recent get_observation() output
+        """
+        try:
+            action_type = action.action_type
+
+            if action_type == "stop":
+                return {"ok": True, "done": True}
+
+            if action_type == "back":
+                self.page.go_back()
+                try:
+                    self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+                except Exception:
+                    pass
+                return {"ok": True}
+
+            if action_type == "scroll_up":
+                self.page.mouse.wheel(0, -800)
+                return {"ok": True}
+
+            if action_type == "scroll_down":
+                self.page.mouse.wheel(0, 800)
+                return {"ok": True}
+
+            if action_type == "goto":
+                if not action.url:
+                    return {"ok": False, "error": "goto: missing url"}
+                self.goto(action.url)
+                return {"ok": True}
+
+            if action_type in ("click", "type"):
+                loc, err = self._resolve_locator(action.index, action_type)
+                if err:
+                    return err
+                if action_type == "click":
+                    loc.click(timeout=5000)
+                else:
+                    loc.click(timeout=5000)
+                    loc.fill(action.text or "", timeout=5000)
+                    if action.submit:
+                        # using the keyboard is the most consistent way to trigger Enter after typing
+                        self.page.keyboard.press("Enter")
+                try:
+                    self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+                except Exception:
+                    pass
+                return {"ok": True}
+
+            return {"ok": False, "error": f"unknown action type: {action_type}"}
+
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+    def execute_action_from_line(self, line: str) -> dict:
+        """Parse an action line and execute it. Returns dict with ok/error keys"""
+        try:
+            action = parse_action(line)
+        except ActionParseError as e:
+            return {"ok": False, "error": f"parse error: {e}"}
+        return self.execute_action(action)
+
     def __enter__(self) -> "BrowserEnv":
         self.start()
         return self
@@ -164,7 +248,14 @@ class BrowserEnv:
 # local test (needs playwright install chromium)
 if __name__ == "__main__":
     with BrowserEnv(headless=True) as env:
-        env.goto("https://google.com")
+        env.goto("https://google.com/search?q=playwright")
         obs = env.get_observation(max_chars=8000)
         print("n_elements:", obs.n_elements, "truncated:", obs.truncated)
         print(obs.text[:4000])
+
+        print("\n--- executing: click 0 ---")
+        res = env.execute_action_from_line("click 0")
+        print("exec_res:", res)
+        obs2 = env.get_observation(max_chars=2000)
+        print("\nnew URL:", env.page.url)
+        print(obs2.text[:1200])
