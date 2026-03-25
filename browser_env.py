@@ -96,29 +96,35 @@ class BrowserEnv:
         n = root.count()
         return [root.nth(i) for i in range(n)]
 
-    @staticmethod
-    def _describe_locator(index: int, loc: Locator) -> str:
-        """Returns a short line for the model to parse: tag, type, role, best-effort label."""
+    def _describe_all_locators(self, selector: str) -> list:
+        """
+        Returns a list of description strings for all elements matching selector,
+        in dom order. Uses a single page.evaluate() call instead of one per element,
+        should be much faster and prevents stalling on pages with lots of interactive elements (e.g. wikipedia)
+        """
         try:
-            desc = loc.evaluate( # js to run inside playwright context to get description of each element
-                """el => {
-                    const tag = el.tagName.toLowerCase();
-                    const type = el.getAttribute('type') || '';
-                    const role = el.getAttribute('role') || '';
-                    const placeholder = el.getAttribute('placeholder') || '';
-                    const al = el.getAttribute('aria-label') || '';
-                    const name = el.getAttribute('name') || '';
-                    let text = (el.innerText || '').trim().replace(/\\s+/g, ' ');
-                    if (text.length > 120) text = text.slice(0, 117) + '...';
-                    const bits = [tag + (type ? '[' + type + ']' : '')];
-                    if (role) bits.push('role=' + role);
-                    const label = [al, placeholder, name, text].find(s => s && s.length);
-                    return bits.join(' ') + (label ? ' | ' + label : '');
-                }"""
+            return self.page.evaluate(
+                """(selector) => {
+                    const els = Array.from(document.querySelectorAll(selector));
+                    return els.map(el => {
+                        const tag = el.tagName.toLowerCase();
+                        const type = el.getAttribute('type') || '';
+                        const role = el.getAttribute('role') || '';
+                        const placeholder = el.getAttribute('placeholder') || '';
+                        const al = el.getAttribute('aria-label') || '';
+                        const name = el.getAttribute('name') || '';
+                        let text = (el.innerText || '').trim().replace(/\\s+/g, ' ');
+                        if (text.length > 120) text = text.slice(0, 117) + '...';
+                        const bits = [tag + (type ? '[' + type + ']' : '')];
+                        if (role) bits.push('role=' + role);
+                        const label = [al, placeholder, name, text].find(s => s && s.length);
+                        return bits.join(' ') + (label ? ' | ' + label : '');
+                    });
+                }""",
+                selector,
             )
-        except Exception as exc: # detached / cross-origin / timeout errors possible
-            desc = f"<unavailable {type(exc).__name__}>"
-        return f"[{index}] {desc}"
+        except Exception:
+            return []
 
     def get_observation(self, max_chars: int = 16000) -> Observation:
         """
@@ -149,8 +155,9 @@ class BrowserEnv:
             f"Interactive elements: {len(self._last_interactive_locators)}",
             "",
         ]
-        for i, loc in enumerate(self._last_interactive_locators):
-            lines.append(self._describe_locator(i, loc))
+        descs = self._describe_all_locators(_INTERACTIVE_SELECTOR)
+        for i, desc in enumerate(descs):
+            lines.append(f"[{i}] {desc}")
 
         body = "\n".join(lines)
         truncated = len(body) > max_chars

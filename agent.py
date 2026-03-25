@@ -182,7 +182,8 @@ if __name__ == "__main__":
         url="https://duckduckgo.com", # agent loop works,
                                       # ddg is much less adversarial to headed playwright than google.
                                       # annoyingly headless playwright is still blocked
-        goal="Search for 'playwright' in the search bar, then click the first organic search result link on the results page.",
+        goal="Navigate to 'wikipedia.com' and then search for 'linux' in the search bar, then click the link to Linus Torvalds.", # works super fast with batch observation :') 
+                                                                                                                                  # so beautiful. god.
         model="gpt-5.4-mini",
         max_steps=5,
         headless=False, # great for testing
