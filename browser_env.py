@@ -224,16 +224,29 @@ class BrowserEnv:
                     return err
                 if action_type == "click":
                     loc.click(timeout=5000)
+                    try:
+                        self.page.wait_for_load_state("domcontentloaded", timeout=8000)
+                    except Exception:
+                        pass
                 else:
                     loc.click(timeout=5000)
                     loc.fill(action.text or "", timeout=5000)
                     if action.submit:
-                        # using the keyboard is the most consistent way to trigger Enter after typing
+                        url_before = self.page.url
                         self.page.keyboard.press("Enter")
-                try:
-                    self.page.wait_for_load_state("load", timeout=8000)
-                except Exception:
-                    pass
+                        # wait for navigation to start (url change) before waiting for it to settle;
+                        # without this, wait_for_load_state sees the departing page as already loaded
+                        # and returns immediately, leaving the next observation on an empty mid-nav DOM
+                        try:
+                            self.page.wait_for_url(
+                                lambda url: url != url_before, timeout=3000
+                            )
+                        except Exception:
+                            pass  # url didn't change (e.g. in-page form): fall through
+                        try:
+                            self.page.wait_for_load_state("domcontentloaded", timeout=8000)
+                        except Exception:
+                            pass
                 return {"ok": True}
 
             return {"ok": False, "error": f"unknown action type: {action_type}"}
