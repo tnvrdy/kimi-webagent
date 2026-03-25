@@ -38,6 +38,7 @@ class Observation:
     text: str
     n_elements: int
     truncated: bool
+    element_descs: list  # parallel to _last_interactive_locators; desc string for each interactive element
 
 
 @dataclass
@@ -165,7 +166,7 @@ class BrowserEnv:
             text = body[: max_chars - len(_TRUNCATION_MARK)] + _TRUNCATION_MARK
         else:
             text = body
-        return Observation(text=text, n_elements=len(self._last_interactive_locators), truncated=truncated)
+        return Observation(text=text, n_elements=len(self._last_interactive_locators), truncated=truncated, element_descs=descs)
 
     def goto(self, url: str, wait_until: str = "domcontentloaded") -> None:
         """
@@ -187,7 +188,7 @@ class BrowserEnv:
         if index < 0 or index >= len(self._last_interactive_locators):
             return None, {"ok": False, "error": f"{action_name}: index {index} out of range (0–{len(self._last_interactive_locators) - 1})"}
         loc = self._last_interactive_locators[index]
-        loc.scroll_into_view_if_needed(timeout=5000)
+        loc.scroll_into_view_if_needed(timeout=8000)
         return loc, None
 
     def execute_action(self, action: ParsedAction) -> dict:
