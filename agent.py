@@ -179,7 +179,9 @@ def run_episode(
 if __name__ == "__main__":
     # needs api key set in env and playwright install chromium
     steps = run_episode(
-        url="https://google.com", # ok captcha is the problem now
+        url="https://duckduckgo.com", # agent loop works,
+                                      # ddg is much less adversarial to headed playwright than google.
+                                      # annoyingly headless playwright is still blocked
         goal="Search for 'playwright' in the search bar, then click the first organic search result link on the results page.",
         model="gpt-5.4-mini",
         max_steps=5,
